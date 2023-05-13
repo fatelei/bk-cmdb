@@ -255,6 +255,30 @@ func (c *DynamicGroupInfo) Validate(objectID string, validatefunc Validatefunc) 
 	return nil
 }
 
+// DynamicGroupClassification group by dynamic group
+type DynamicGroupClassification struct {
+	// ID is dynamic group classification instance unique id.
+	ID string `json:"id" bson:"id"`
+
+	// Name is dynamic group classification name.
+	Name string `json:"name" bson:"name"`
+
+	// Parent id
+	ParentID string `json:"parent_id" bson:"parent_id"`
+
+	// CreateUser create username.
+	CreateUser string `json:"create_user" bson:"create_user"`
+
+	// ModifyUser modify username.
+	ModifyUser string `json:"modify_user" bson:"modify_user"`
+
+	// CreateTime create timestamp.
+	CreateTime time.Time `json:"create_time" bson:"create_time"`
+
+	// UpdateTime last update timestamp.
+	UpdateTime time.Time `json:"last_time" bson:"last_time"`
+}
+
 // DynamicGroup is dynamic grouping of conditions for host/set data searching.
 type DynamicGroup struct {
 	// AppID is application id which dynamic group belongs to.
@@ -265,6 +289,9 @@ type DynamicGroup struct {
 
 	// Name is dynamic group name.
 	Name string `json:"name" bson:"name"`
+
+	// ClassificationID is classification id
+	ClassificationID string `json:"classification_id" bson:"classification_id"`
 
 	// ObjID is cmdb object id, could be host/set now.
 	ObjID string `json:"bk_obj_id" bson:"bk_obj_id"`
