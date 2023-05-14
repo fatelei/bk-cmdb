@@ -270,6 +270,20 @@ func (s *Service) initDynamicGroup(web *restful.WebService) {
 		Language: s.Engine.Language,
 	})
 
+	// get dynamic group classification
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodGet,
+		Path:    "/dynamicgroup/classification",
+		Handler: s.GetDynamicGroupClassification,
+	})
+
+	// create dynamic group classification
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodPost,
+		Path:    "/dynamicgroup/classification",
+		Handler: s.AddDynamicGroupClassification,
+	})
+
 	// create new dynamic group.
 	utility.AddHandler(rest.Action{
 		Verb:    http.MethodPost,

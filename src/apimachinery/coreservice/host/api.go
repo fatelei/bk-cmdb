@@ -14,6 +14,7 @@ package host
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"configcenter/src/common/errors"
@@ -619,4 +620,62 @@ func (h *host) GetDistinctHostIDByTopology(ctx context.Context, header http.Head
 		return nil, err
 	}
 	return resp.Data.IDArr, nil
+}
+
+// GetDynamicGroupClassification get dynamic group classification
+func (h *host) GetDynamicGroupClassification(ctx context.Context, header http.Header) ([]metadata.DynamicGroupClassification, errors.CCErrorCoder) {
+	resp := new(metadata.GetDynamicGroupClassificationResults)
+	subPath := "/dynamicgroup/classification"
+	err := h.client.Get().
+		WithContext(ctx).
+		SubResourcef(subPath).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, errors.CCHttpError
+	}
+	if err := resp.CCError(); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// GetDynamicGroupClassification get dynamic group classification
+func (h *host) GetDynamicGroupClassificationByID(ctx context.Context, header http.Header, classificationID string) (*metadata.GetDynamicGroupClassificationResult, errors.CCErrorCoder) {
+	resp := new(metadata.GetDynamicGroupClassificationResult)
+	subPath := fmt.Sprintf("/dynamicgroup/classification/%s", classificationID)
+	err := h.client.Get().
+		WithContext(ctx).
+		SubResourcef(subPath).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, errors.CCHttpError
+	}
+	if err := resp.CCError(); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// CreateDynamicGroupClassification create dynamic group classification
+func (h *host) CreateDynamicGroupClassification(ctx context.Context, header http.Header, input *metadata.DynamicGroupClassification) (*metadata.IDResult, errors.CCErrorCoder) {
+	resp := new(metadata.IDResult)
+	subPath := "/dynamicgroup/classification"
+	err := h.client.Post().
+		WithContext(ctx).
+		Body(input).
+		SubResourcef(subPath).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, errors.CCHttpError
+	}
+	if err := resp.CCError(); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }

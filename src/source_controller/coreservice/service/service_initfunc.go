@@ -220,6 +220,25 @@ func (s *coreService) host(web *restful.WebService) {
 		Handler: s.SearchDynamicGroup,
 	})
 
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodGet,
+		Path:    "/dynamicgroup/classification",
+		Handler: s.GetDynamicGroupClassification,
+	})
+
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodGet,
+		Path:    "/dynamicgroup/classification/{id}",
+		Handler: s.GetDynamicGroupClassificationByID,
+	})
+
+	// create dynamic group classification
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodPost,
+		Path:    "/dynamicgroup/classification",
+		Handler: s.AddDynamicGroupClassification,
+	})
+
 	utility.AddHandler(rest.Action{Verb: http.MethodPost, Path: "/create/usercustom/{bk_user}", Handler: s.AddUserCustom})
 	utility.AddHandler(rest.Action{Verb: http.MethodPut, Path: "/update/usercustom/{bk_user}/{id}", Handler: s.UpdateUserCustomByID})
 	utility.AddHandler(rest.Action{Verb: http.MethodGet, Path: "/find/usercustom/user/search/{bk_user}", Handler: s.GetUserCustomByUser})

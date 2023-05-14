@@ -356,6 +356,16 @@ type GetDynamicGroupResult struct {
 	Data     DynamicGroup `json:"data"`
 }
 
+type GetDynamicGroupClassificationResult struct {
+	BaseResp `json:",inline"`
+	Data     DynamicGroupClassification `json:"data"`
+}
+
+type GetDynamicGroupClassificationResults struct {
+	BaseResp `json:",inline"`
+	Data     []DynamicGroupClassification `json:"data"`
+}
+
 // NewDynamicGroupID creates and returns a new dynamic group string unique ID.
 func NewDynamicGroupID() (string, error) {
 	uuid, err := uuid.NewUUID()

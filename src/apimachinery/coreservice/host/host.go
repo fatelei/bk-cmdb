@@ -102,6 +102,10 @@ type HostClientInterface interface {
 
 	TransferHostResourceDirectory(ctx context.Context, header http.Header,
 		option *metadata.TransferHostResourceDirectory) errors.CCErrorCoder
+
+	GetDynamicGroupClassification(ctx context.Context, header http.Header) ([]metadata.DynamicGroupClassification, errors.CCErrorCoder)
+	CreateDynamicGroupClassification(ctx context.Context, header http.Header, input *metadata.DynamicGroupClassification) (*metadata.IDResult, errors.CCErrorCoder)
+	GetDynamicGroupClassificationByID(ctx context.Context, header http.Header, classificationID string) (*metadata.GetDynamicGroupClassificationResult, errors.CCErrorCoder)
 }
 
 // NewHostClientInterface TODO

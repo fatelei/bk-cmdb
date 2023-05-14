@@ -28,6 +28,98 @@ import (
 	"configcenter/src/scene_server/host_server/logics"
 )
 
+type ClassificationTree struct {
+	ID       string                `json:"id"`
+	Name     string                `json:"name"`
+	ParentID string                `json:"parent_id"`
+	Children []*ClassificationTree `json:"children"`
+}
+
+func buildTree(node *meta.DynamicGroupClassification, tree *ClassificationTree) {
+	if node.ParentID == tree.ID {
+		tree.Children = append(tree.Children, &ClassificationTree{
+			ID:       node.ID,
+			Name:     node.Name,
+			ParentID: node.ParentID,
+			Children: make([]*ClassificationTree, 0),
+		})
+	}
+
+	for _, child := range tree.Children {
+		buildTree(node, child)
+	}
+}
+
+// GetDynamicGroupClassification get dynamic group classification
+func (s *Service) GetDynamicGroupClassification(ctx *rest.Contexts) {
+	result, err := s.CoreAPI.CoreService().Host().GetDynamicGroupClassification(ctx.Kit.Ctx, ctx.Kit.Header)
+	if err != nil {
+		blog.Errorf("get dynamic group failed, err: %+v, rid: %s",
+			err, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommHTTPDoRequestFailed))
+		return
+	}
+
+	root := &ClassificationTree{
+		ID:       "-1",
+		Name:     "root",
+		ParentID: "-1",
+		Children: make([]*ClassificationTree, 0),
+	}
+
+	for _, item := range result {
+		if item.ParentID == "-1" {
+			root.Children = append(root.Children, &ClassificationTree{
+				ID:       item.ID,
+				Name:     item.Name,
+				ParentID: item.ParentID,
+				Children: make([]*ClassificationTree, 0),
+			})
+		} else {
+			buildTree(&item, root)
+		}
+	}
+	ctx.RespEntity(root)
+}
+
+// AddDynamicGroupClassification add dynamic group classification
+func (s *Service) AddDynamicGroupClassification(ctx *rest.Contexts) {
+	newDynamicGroupClassification := meta.DynamicGroupClassification{}
+	if err := ctx.DecodeInto(&newDynamicGroupClassification); err != nil {
+		blog.Errorf("create dynamic group classification failed, decode request body err: %+v, rid: %s", err, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommJSONUnmarshalFailed))
+		return
+	}
+
+	newDynamicGroupClassification.CreateUser = ctx.Kit.User
+	newDynamicGroupClassification.CreateTime = time.Now().UTC()
+	response := &meta.IDResult{}
+
+	// create base on auto run txn with func.
+	autoRunTxnFunc := func() error {
+		var err error
+		response, err = s.CoreAPI.CoreService().Host().CreateDynamicGroupClassification(ctx.Kit.Ctx, ctx.Kit.Header, &newDynamicGroupClassification)
+		if err != nil {
+			blog.Errorf("create dynamic group classification failed, err: %+v, input: %+v, rid: %s", err, newDynamicGroupClassification, ctx.Kit.Rid)
+			return ctx.Kit.CCError.Error(common.CCErrCommHTTPDoRequestFailed)
+		}
+		if !response.Result {
+			blog.Errorf("create dynamic group classification failed, errcode: %d, errmsg: %s, input: %+v, rid: %s",
+				response.Code, response.ErrMsg, newDynamicGroupClassification, ctx.Kit.Rid)
+			return response.CCError()
+		}
+		newDynamicGroupClassification.ID = response.Data.ID
+		return nil
+	}
+
+	// do create action now.
+	if err := s.Engine.CoreAPI.CoreService().Txn().AutoRunTxn(ctx.Kit.Ctx, ctx.Kit.Header, autoRunTxnFunc); err != nil {
+		ctx.RespAutoError(err)
+		return
+	}
+	ctx.RespEntity(response.Data)
+}
+
 // CreateDynamicGroup creates a new dynamic group object.
 func (s *Service) CreateDynamicGroup(ctx *rest.Contexts) {
 	newDynamicGroup := meta.DynamicGroup{}
@@ -41,6 +133,19 @@ func (s *Service) CreateDynamicGroup(ctx *rest.Contexts) {
 	validatefunc := func(objectID string) ([]meta.Attribute, error) {
 		return logics.NewLogics(s.Engine, s.CacheDB, s.AuthManager).
 			SearchObjectAttributes(ctx.Kit, newDynamicGroup.AppID, objectID)
+	}
+
+	dynamicGroupClassification, err := s.CoreAPI.CoreService().Host().GetDynamicGroupClassificationByID(ctx.Kit.Ctx, ctx.Kit.Header, newDynamicGroup.ClassificationID)
+	if err != nil {
+		blog.Errorf("create dynamic group failed, get dynamic group classification err: %+v, rid: %s", err, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommHTTPDoRequestFailed))
+		return
+	}
+
+	if len(dynamicGroupClassification.Data.Name) == 0 {
+		blog.Errorf("create dynamic group failed, dynamic group classification not exists: %s, rid: %s", newDynamicGroup.ClassificationID, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommNotFound))
+		return
 	}
 
 	if err := newDynamicGroup.Validate(validatefunc); err != nil {
