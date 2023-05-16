@@ -214,6 +214,23 @@ func (s *coreService) host(web *restful.WebService) {
 		Path:    "/delete/dynamicgroup/{bk_biz_id}/{id}",
 		Handler: s.DeleteDynamicGroup,
 	})
+
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodPut,
+		Path:    "/update/dynamicgroup/{id}",
+		Handler: s.UpdateDynamicGroupByID,
+	})
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodGet,
+		Path:    "/find/dynamicgroup/{id}",
+		Handler: s.GetDynamicGroupByID,
+	})
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodDelete,
+		Path:    "/delete/dynamicgroup/{id}",
+		Handler: s.DeleteDynamicGroupByID,
+	})
+
 	utility.AddHandler(rest.Action{
 		Verb:    http.MethodPost,
 		Path:    "/findmany/dynamicgroup/search",

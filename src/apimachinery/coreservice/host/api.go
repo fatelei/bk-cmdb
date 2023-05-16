@@ -330,6 +330,57 @@ func (h *host) GetDynamicGroup(ctx context.Context, bizID, id string,
 	return
 }
 
+// UpdateDynamicGroupByID is dynamic group update action api machinery.
+func (h *host) UpdateDynamicGroupByID(ctx context.Context, id string,
+	header http.Header, data map[string]interface{}) (resp *metadata.BaseResp, err error) {
+
+	resp = new(metadata.BaseResp)
+	subPath := "/update/dynamicgroup/%s"
+
+	err = h.client.Put().
+		WithContext(ctx).
+		Body(data).
+		SubResourcef(subPath, id).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+	return
+}
+
+// DeleteDynamicGroupByID is dynamic group delete action api machinery.
+func (h *host) DeleteDynamicGroupByID(ctx context.Context, id string,
+	header http.Header) (resp *metadata.BaseResp, err error) {
+
+	resp = new(metadata.BaseResp)
+	subPath := "/delete/dynamicgroup/%s"
+
+	err = h.client.Delete().
+		WithContext(ctx).
+		Body(nil).
+		SubResourcef(subPath, id).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+	return
+}
+
+// GetDynamicGroup is dynamic group query detail action api machinery.
+func (h *host) GetDynamicGroupByID(ctx context.Context, id string,
+	header http.Header) (resp *metadata.GetDynamicGroupResult, err error) {
+
+	resp = new(metadata.GetDynamicGroupResult)
+	subPath := "/find/dynamicgroup/%s"
+
+	err = h.client.Get().
+		WithContext(ctx).
+		Body(nil).
+		SubResourcef(subPath, id).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+	return
+}
+
 // SearchDynamicGroup is dynamic group search action api machinery.
 func (h *host) SearchDynamicGroup(ctx context.Context, header http.Header,
 	opt *metadata.QueryCondition) (resp *metadata.SearchDynamicGroupResult, err error) {

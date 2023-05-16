@@ -312,6 +312,27 @@ func (s *Service) initDynamicGroup(web *restful.WebService) {
 		Handler: s.DeleteDynamicGroup,
 	})
 
+	// update dynamic group by id.
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodPut,
+		Path:    "/dynamicgroup/{id}",
+		Handler: s.UpdateDynamicGroupByID,
+	})
+
+	// query target dynamic group by id.
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodGet,
+		Path:    "/dynamicgroup/{id}",
+		Handler: s.GetDynamicGroupByID,
+	})
+
+	// delete target dynamic group.
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodDelete,
+		Path:    "/dynamicgroup/{id}",
+		Handler: s.DeleteDynamicGroupByID,
+	})
+
 	// search(list) dynamic groups.
 	utility.AddHandler(rest.Action{
 		Verb:    http.MethodPost,

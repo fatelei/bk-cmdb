@@ -332,7 +332,10 @@ func (g *DynamicGroup) Validate(validatefunc Validatefunc) error {
 		// it's not OK if conditions empty in this level.
 		return errors.New("empty info.condition")
 	}
-	return g.Info.Validate(g.ObjID, validatefunc)
+	if g.AppID != 0 {
+		return g.Info.Validate(g.ObjID, validatefunc)
+	}
+	return nil
 }
 
 // DynamicGroupBatch is batch result struct of dynamic group.

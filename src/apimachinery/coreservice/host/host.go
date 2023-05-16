@@ -57,6 +57,14 @@ type HostClientInterface interface {
 	DeleteDynamicGroup(ctx context.Context, bizID, id string, header http.Header) (resp *metadata.BaseResp, err error)
 	GetDynamicGroup(ctx context.Context, bizID, id string, header http.Header) (resp *metadata.GetDynamicGroupResult,
 		err error)
+
+	UpdateDynamicGroupByID(ctx context.Context, id string,
+		header http.Header, data map[string]interface{}) (resp *metadata.BaseResp, err error)
+	DeleteDynamicGroupByID(ctx context.Context, id string,
+		header http.Header) (resp *metadata.BaseResp, err error)
+	GetDynamicGroupByID(ctx context.Context, id string,
+		header http.Header) (resp *metadata.GetDynamicGroupResult, err error)
+
 	SearchDynamicGroup(ctx context.Context, header http.Header, opt *metadata.QueryCondition) (
 		resp *metadata.SearchDynamicGroupResult, err error)
 
