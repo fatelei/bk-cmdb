@@ -214,10 +214,46 @@ func (s *coreService) host(web *restful.WebService) {
 		Path:    "/delete/dynamicgroup/{bk_biz_id}/{id}",
 		Handler: s.DeleteDynamicGroup,
 	})
+
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodPut,
+		Path:    "/update/dynamicgroup/{id}",
+		Handler: s.UpdateDynamicGroupByID,
+	})
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodGet,
+		Path:    "/find/dynamicgroup/{id}",
+		Handler: s.GetDynamicGroupByID,
+	})
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodDelete,
+		Path:    "/delete/dynamicgroup/{id}",
+		Handler: s.DeleteDynamicGroupByID,
+	})
+
 	utility.AddHandler(rest.Action{
 		Verb:    http.MethodPost,
 		Path:    "/findmany/dynamicgroup/search",
 		Handler: s.SearchDynamicGroup,
+	})
+
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodGet,
+		Path:    "/dynamicgroup/classification",
+		Handler: s.GetDynamicGroupClassification,
+	})
+
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodGet,
+		Path:    "/dynamicgroup/classification/{id}",
+		Handler: s.GetDynamicGroupClassificationByID,
+	})
+
+	// create dynamic group classification
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodPost,
+		Path:    "/dynamicgroup/classification",
+		Handler: s.AddDynamicGroupClassification,
 	})
 
 	utility.AddHandler(rest.Action{Verb: http.MethodPost, Path: "/create/usercustom/{bk_user}", Handler: s.AddUserCustom})

@@ -14,6 +14,7 @@ package host
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"configcenter/src/common/errors"
@@ -329,6 +330,57 @@ func (h *host) GetDynamicGroup(ctx context.Context, bizID, id string,
 	return
 }
 
+// UpdateDynamicGroupByID is dynamic group update action api machinery.
+func (h *host) UpdateDynamicGroupByID(ctx context.Context, id string,
+	header http.Header, data map[string]interface{}) (resp *metadata.BaseResp, err error) {
+
+	resp = new(metadata.BaseResp)
+	subPath := "/update/dynamicgroup/%s"
+
+	err = h.client.Put().
+		WithContext(ctx).
+		Body(data).
+		SubResourcef(subPath, id).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+	return
+}
+
+// DeleteDynamicGroupByID is dynamic group delete action api machinery.
+func (h *host) DeleteDynamicGroupByID(ctx context.Context, id string,
+	header http.Header) (resp *metadata.BaseResp, err error) {
+
+	resp = new(metadata.BaseResp)
+	subPath := "/delete/dynamicgroup/%s"
+
+	err = h.client.Delete().
+		WithContext(ctx).
+		Body(nil).
+		SubResourcef(subPath, id).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+	return
+}
+
+// GetDynamicGroup is dynamic group query detail action api machinery.
+func (h *host) GetDynamicGroupByID(ctx context.Context, id string,
+	header http.Header) (resp *metadata.GetDynamicGroupResult, err error) {
+
+	resp = new(metadata.GetDynamicGroupResult)
+	subPath := "/find/dynamicgroup/%s"
+
+	err = h.client.Get().
+		WithContext(ctx).
+		Body(nil).
+		SubResourcef(subPath, id).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+	return
+}
+
 // SearchDynamicGroup is dynamic group search action api machinery.
 func (h *host) SearchDynamicGroup(ctx context.Context, header http.Header,
 	opt *metadata.QueryCondition) (resp *metadata.SearchDynamicGroupResult, err error) {
@@ -619,4 +671,62 @@ func (h *host) GetDistinctHostIDByTopology(ctx context.Context, header http.Head
 		return nil, err
 	}
 	return resp.Data.IDArr, nil
+}
+
+// GetDynamicGroupClassification get dynamic group classification
+func (h *host) GetDynamicGroupClassification(ctx context.Context, header http.Header) ([]metadata.DynamicGroupClassification, errors.CCErrorCoder) {
+	resp := new(metadata.GetDynamicGroupClassificationResults)
+	subPath := "/dynamicgroup/classification"
+	err := h.client.Get().
+		WithContext(ctx).
+		SubResourcef(subPath).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, errors.CCHttpError
+	}
+	if err := resp.CCError(); err != nil {
+		return nil, err
+	}
+	return resp.Data, nil
+}
+
+// GetDynamicGroupClassification get dynamic group classification
+func (h *host) GetDynamicGroupClassificationByID(ctx context.Context, header http.Header, classificationID string) (*metadata.GetDynamicGroupClassificationResult, errors.CCErrorCoder) {
+	resp := new(metadata.GetDynamicGroupClassificationResult)
+	subPath := fmt.Sprintf("/dynamicgroup/classification/%s", classificationID)
+	err := h.client.Get().
+		WithContext(ctx).
+		SubResourcef(subPath).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, errors.CCHttpError
+	}
+	if err := resp.CCError(); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+// CreateDynamicGroupClassification create dynamic group classification
+func (h *host) CreateDynamicGroupClassification(ctx context.Context, header http.Header, input *metadata.DynamicGroupClassification) (*metadata.IDResult, errors.CCErrorCoder) {
+	resp := new(metadata.IDResult)
+	subPath := "/dynamicgroup/classification"
+	err := h.client.Post().
+		WithContext(ctx).
+		Body(input).
+		SubResourcef(subPath).
+		WithHeaders(header).
+		Do().
+		Into(resp)
+	if err != nil {
+		return nil, errors.CCHttpError
+	}
+	if err := resp.CCError(); err != nil {
+		return nil, err
+	}
+	return resp, nil
 }

@@ -255,6 +255,30 @@ func (c *DynamicGroupInfo) Validate(objectID string, validatefunc Validatefunc) 
 	return nil
 }
 
+// DynamicGroupClassification group by dynamic group
+type DynamicGroupClassification struct {
+	// ID is dynamic group classification instance unique id.
+	ID string `json:"id" bson:"id"`
+
+	// Name is dynamic group classification name.
+	Name string `json:"name" bson:"name"`
+
+	// Parent id
+	ParentID string `json:"parent_id" bson:"parent_id"`
+
+	// CreateUser create username.
+	CreateUser string `json:"create_user" bson:"create_user"`
+
+	// ModifyUser modify username.
+	ModifyUser string `json:"modify_user" bson:"modify_user"`
+
+	// CreateTime create timestamp.
+	CreateTime time.Time `json:"create_time" bson:"create_time"`
+
+	// UpdateTime last update timestamp.
+	UpdateTime time.Time `json:"last_time" bson:"last_time"`
+}
+
 // DynamicGroup is dynamic grouping of conditions for host/set data searching.
 type DynamicGroup struct {
 	// AppID is application id which dynamic group belongs to.
@@ -265,6 +289,9 @@ type DynamicGroup struct {
 
 	// Name is dynamic group name.
 	Name string `json:"name" bson:"name"`
+
+	// ClassificationID is classification id
+	ClassificationID string `json:"classification_id" bson:"classification_id"`
 
 	// ObjID is cmdb object id, could be host/set now.
 	ObjID string `json:"bk_obj_id" bson:"bk_obj_id"`
@@ -305,7 +332,10 @@ func (g *DynamicGroup) Validate(validatefunc Validatefunc) error {
 		// it's not OK if conditions empty in this level.
 		return errors.New("empty info.condition")
 	}
-	return g.Info.Validate(g.ObjID, validatefunc)
+	if g.AppID != 0 {
+		return g.Info.Validate(g.ObjID, validatefunc)
+	}
+	return nil
 }
 
 // DynamicGroupBatch is batch result struct of dynamic group.
@@ -327,6 +357,16 @@ type SearchDynamicGroupResult struct {
 type GetDynamicGroupResult struct {
 	BaseResp `json:",inline"`
 	Data     DynamicGroup `json:"data"`
+}
+
+type GetDynamicGroupClassificationResult struct {
+	BaseResp `json:",inline"`
+	Data     DynamicGroupClassification `json:"data"`
+}
+
+type GetDynamicGroupClassificationResults struct {
+	BaseResp `json:",inline"`
+	Data     []DynamicGroupClassification `json:"data"`
 }
 
 // NewDynamicGroupID creates and returns a new dynamic group string unique ID.

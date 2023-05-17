@@ -270,6 +270,20 @@ func (s *Service) initDynamicGroup(web *restful.WebService) {
 		Language: s.Engine.Language,
 	})
 
+	// get dynamic group classification
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodGet,
+		Path:    "/dynamicgroup/classification",
+		Handler: s.GetDynamicGroupClassification,
+	})
+
+	// create dynamic group classification
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodPost,
+		Path:    "/dynamicgroup/classification",
+		Handler: s.AddDynamicGroupClassification,
+	})
+
 	// create new dynamic group.
 	utility.AddHandler(rest.Action{
 		Verb:    http.MethodPost,
@@ -296,6 +310,27 @@ func (s *Service) initDynamicGroup(web *restful.WebService) {
 		Verb:    http.MethodDelete,
 		Path:    "/dynamicgroup/{bk_biz_id}/{id}",
 		Handler: s.DeleteDynamicGroup,
+	})
+
+	// update dynamic group by id.
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodPut,
+		Path:    "/dynamicgroup/{id}",
+		Handler: s.UpdateDynamicGroupByID,
+	})
+
+	// query target dynamic group by id.
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodGet,
+		Path:    "/dynamicgroup/{id}",
+		Handler: s.GetDynamicGroupByID,
+	})
+
+	// delete target dynamic group.
+	utility.AddHandler(rest.Action{
+		Verb:    http.MethodDelete,
+		Path:    "/dynamicgroup/{id}",
+		Handler: s.DeleteDynamicGroupByID,
 	})
 
 	// search(list) dynamic groups.

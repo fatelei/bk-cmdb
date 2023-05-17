@@ -28,6 +28,98 @@ import (
 	"configcenter/src/scene_server/host_server/logics"
 )
 
+type ClassificationTree struct {
+	ID       string                `json:"id"`
+	Name     string                `json:"name"`
+	ParentID string                `json:"parent_id"`
+	Children []*ClassificationTree `json:"children"`
+}
+
+func buildTree(node *meta.DynamicGroupClassification, tree *ClassificationTree) {
+	if node.ParentID == tree.ID {
+		tree.Children = append(tree.Children, &ClassificationTree{
+			ID:       node.ID,
+			Name:     node.Name,
+			ParentID: node.ParentID,
+			Children: make([]*ClassificationTree, 0),
+		})
+	}
+
+	for _, child := range tree.Children {
+		buildTree(node, child)
+	}
+}
+
+// GetDynamicGroupClassification get dynamic group classification
+func (s *Service) GetDynamicGroupClassification(ctx *rest.Contexts) {
+	result, err := s.CoreAPI.CoreService().Host().GetDynamicGroupClassification(ctx.Kit.Ctx, ctx.Kit.Header)
+	if err != nil {
+		blog.Errorf("get dynamic group failed, err: %+v, rid: %s",
+			err, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommHTTPDoRequestFailed))
+		return
+	}
+
+	root := &ClassificationTree{
+		ID:       "-1",
+		Name:     "root",
+		ParentID: "-1",
+		Children: make([]*ClassificationTree, 0),
+	}
+
+	for _, item := range result {
+		if item.ParentID == "-1" {
+			root.Children = append(root.Children, &ClassificationTree{
+				ID:       item.ID,
+				Name:     item.Name,
+				ParentID: item.ParentID,
+				Children: make([]*ClassificationTree, 0),
+			})
+		} else {
+			buildTree(&item, root)
+		}
+	}
+	ctx.RespEntity(root)
+}
+
+// AddDynamicGroupClassification add dynamic group classification
+func (s *Service) AddDynamicGroupClassification(ctx *rest.Contexts) {
+	newDynamicGroupClassification := meta.DynamicGroupClassification{}
+	if err := ctx.DecodeInto(&newDynamicGroupClassification); err != nil {
+		blog.Errorf("create dynamic group classification failed, decode request body err: %+v, rid: %s", err, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommJSONUnmarshalFailed))
+		return
+	}
+
+	newDynamicGroupClassification.CreateUser = ctx.Kit.User
+	newDynamicGroupClassification.CreateTime = time.Now().UTC()
+	response := &meta.IDResult{}
+
+	// create base on auto run txn with func.
+	autoRunTxnFunc := func() error {
+		var err error
+		response, err = s.CoreAPI.CoreService().Host().CreateDynamicGroupClassification(ctx.Kit.Ctx, ctx.Kit.Header, &newDynamicGroupClassification)
+		if err != nil {
+			blog.Errorf("create dynamic group classification failed, err: %+v, input: %+v, rid: %s", err, newDynamicGroupClassification, ctx.Kit.Rid)
+			return ctx.Kit.CCError.Error(common.CCErrCommHTTPDoRequestFailed)
+		}
+		if !response.Result {
+			blog.Errorf("create dynamic group classification failed, errcode: %d, errmsg: %s, input: %+v, rid: %s",
+				response.Code, response.ErrMsg, newDynamicGroupClassification, ctx.Kit.Rid)
+			return response.CCError()
+		}
+		newDynamicGroupClassification.ID = response.Data.ID
+		return nil
+	}
+
+	// do create action now.
+	if err := s.Engine.CoreAPI.CoreService().Txn().AutoRunTxn(ctx.Kit.Ctx, ctx.Kit.Header, autoRunTxnFunc); err != nil {
+		ctx.RespAutoError(err)
+		return
+	}
+	ctx.RespEntity(response.Data)
+}
+
 // CreateDynamicGroup creates a new dynamic group object.
 func (s *Service) CreateDynamicGroup(ctx *rest.Contexts) {
 	newDynamicGroup := meta.DynamicGroup{}
@@ -41,6 +133,19 @@ func (s *Service) CreateDynamicGroup(ctx *rest.Contexts) {
 	validatefunc := func(objectID string) ([]meta.Attribute, error) {
 		return logics.NewLogics(s.Engine, s.CacheDB, s.AuthManager).
 			SearchObjectAttributes(ctx.Kit, newDynamicGroup.AppID, objectID)
+	}
+
+	dynamicGroupClassification, err := s.CoreAPI.CoreService().Host().GetDynamicGroupClassificationByID(ctx.Kit.Ctx, ctx.Kit.Header, newDynamicGroup.ClassificationID)
+	if err != nil {
+		blog.Errorf("create dynamic group failed, get dynamic group classification err: %+v, rid: %s", err, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommHTTPDoRequestFailed))
+		return
+	}
+
+	if len(dynamicGroupClassification.Data.Name) == 0 {
+		blog.Errorf("create dynamic group failed, dynamic group classification not exists: %s, rid: %s", newDynamicGroup.ClassificationID, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommNotFound))
+		return
 	}
 
 	if err := newDynamicGroup.Validate(validatefunc); err != nil {
@@ -82,10 +187,17 @@ func (s *Service) CreateDynamicGroup(ctx *rest.Contexts) {
 
 		// register dynamic group resource create action to iam.
 		if auth.EnableAuthorize() {
-			bizID := strconv.FormatInt(newDynamicGroup.AppID, 10)
+			var resp *meta.GetDynamicGroupResult
+			var innerErr error
+			var bizID string
+			if newDynamicGroup.AppID > 0 {
+				bizID = strconv.FormatInt(newDynamicGroup.AppID, 10)
+				resp, innerErr = s.CoreAPI.CoreService().Host().GetDynamicGroup(ctx.Kit.Ctx, bizID, newDynamicGroup.ID, ctx.Kit.Header)
+			} else {
+				resp, innerErr = s.CoreAPI.CoreService().Host().GetDynamicGroupByID(ctx.Kit.Ctx, newDynamicGroup.ID, ctx.Kit.Header)
+			}
 
-			resp, err := s.CoreAPI.CoreService().Host().GetDynamicGroup(ctx.Kit.Ctx, bizID, newDynamicGroup.ID, ctx.Kit.Header)
-			if err != nil {
+			if innerErr != nil {
 				blog.Errorf("get created new dynamic group failed, err: %+v, biz: %s, ID: %s, rid: %s", err, bizID, newDynamicGroup.ID, ctx.Kit.Rid)
 				return ctx.Kit.CCError.Error(common.CCErrCommHTTPDoRequestFailed)
 			}
@@ -249,6 +361,128 @@ func (s *Service) UpdateDynamicGroup(ctx *rest.Contexts) {
 	ctx.RespEntity(nil)
 }
 
+// UpdateDynamicGroupByID updates target dynamic group.
+func (s *Service) UpdateDynamicGroupByID(ctx *rest.Contexts) {
+	req := ctx.Request
+
+	// target dynamic group ID.
+	targetID := req.PathParameter("id")
+
+	// decode update request data(DynamicGroup struct to interfaces).
+	params := make(map[string]interface{})
+	if err := ctx.DecodeInto(&params); err != nil {
+		blog.Errorf("update dynamic group failed, decode request body err: %+v, rid: %s", err, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommJSONUnmarshalFailed))
+		return
+	}
+
+	// final updates.
+	updates := make(map[string]interface{})
+
+	if info, isExist := params["info"]; isExist {
+		// update dynamic group info.
+		row, err := json.Marshal(info)
+		if err != nil {
+			blog.Errorf("update dynamic group failed, invalid info, info: %+v, rid: %s", info, ctx.Kit.Rid)
+			ctx.RespAutoError(ctx.Kit.CCError.Errorf(common.CCErrCommParamsIsInvalid, "info"))
+			return
+		}
+
+		dynamicGroupInfo := &meta.DynamicGroupInfo{}
+		if err = json.Unmarshal(row, dynamicGroupInfo); err != nil {
+			blog.Errorf("update dynamic group failed, invalid info, info: %+v, rid: %s", info, ctx.Kit.Rid)
+			ctx.RespAutoError(ctx.Kit.CCError.Errorf(common.CCErrCommParamsIsInvalid, "info"))
+			return
+		}
+
+		objectIDParam, isObjIDExist := params["bk_obj_id"]
+		if !isObjIDExist {
+			blog.Errorf("update dynamic group failed, bk_obj_id is required in update info condition action, input: %+v, rid: %s",
+				params, ctx.Kit.Rid)
+			ctx.RespAutoError(ctx.Kit.CCError.Errorf(common.CCErrCommParamsIsInvalid, "bk_obj_id"))
+			return
+		}
+		objectID, ok := objectIDParam.(string)
+		if !ok {
+			blog.Errorf("update dynamic group failed, invalid bk_obj_id type, objectID: %+v, rid: %s", objectIDParam, ctx.Kit.Rid)
+			ctx.RespAutoError(ctx.Kit.CCError.Errorf(common.CCErrCommParamsIsInvalid, "bk_obj_id"))
+			return
+		}
+
+		//  validate dynamic group func.
+		validatefunc := func(objectID string) ([]meta.Attribute, error) {
+			return logics.NewLogics(s.Engine, s.CacheDB, s.AuthManager).
+				SearchObjectAttributes(ctx.Kit, 0, objectID)
+		}
+
+		if err := dynamicGroupInfo.Validate(objectID, validatefunc); err != nil {
+			blog.Errorf("update dynamic group failed, invalid param: %+v, rid: %s", err, ctx.Kit.Rid)
+			ctx.RespAutoError(ctx.Kit.CCError.Errorf(common.CCErrCommParamsIsInvalid, err.Error()))
+			return
+		}
+		updates[common.BKObjIDField] = objectID
+		updates["info"] = dynamicGroupInfo
+
+	} else {
+		_, isExist := params[common.BKObjIDField]
+		if isExist {
+			blog.Errorf("update dynamic group failed, info.condition is required in update bk_obj_id action, input: %+v, rid: %s",
+				params, ctx.Kit.Rid)
+			ctx.RespAutoError(ctx.Kit.CCError.Errorf(common.CCErrCommParamsIsInvalid, "info.condition"))
+			return
+		}
+
+		_, isExist = params[common.BKFieldName]
+		if !isExist {
+			blog.Errorf("update dynamic group failed, empty update content, bk_biz_id/info/name, input: %+v, rid: %s",
+				params, ctx.Kit.Rid)
+			ctx.RespAutoError(ctx.Kit.CCError.Errorf(common.CCErrCommParamsIsInvalid, "info.condition"))
+			return
+		}
+	}
+
+	// update name.
+	if name, isExist := params[common.BKFieldName]; isExist {
+		updates[common.BKFieldName] = name
+	}
+
+	// update base on auto run txn with func.
+	autoRunTxnFunc := func() error {
+		// audit log.
+		audit := auditlog.NewDynamicGroupAuditLog(s.CoreAPI.CoreService())
+		auditParam := auditlog.NewGenerateAuditCommonParameter(ctx.Kit, meta.AuditUpdate).WithUpdateFields(updates)
+		auditLogs, err := audit.GenerateAuditLog(auditParam, &meta.DynamicGroup{ID: targetID})
+		if err != nil {
+			blog.Errorf("generate audit log failed after update dynamic group[%s], err: %+v, rid: %s", targetID, err, ctx.Kit.Rid)
+			return err
+		}
+		if err := audit.SaveAuditLog(ctx.Kit, auditLogs...); err != nil {
+			blog.Errorf("save audit log failed after update dynamic group[%s], err: %+v, rid: %s", targetID, err, ctx.Kit.Rid)
+			return err
+		}
+
+		response, err := s.CoreAPI.CoreService().Host().UpdateDynamicGroupByID(ctx.Kit.Ctx, targetID, ctx.Kit.Header, updates)
+		if err != nil {
+			blog.Errorf("update dynamic group failed, err: %+v, input: %+v, rid: %s",
+				err, params, ctx.Kit.Rid)
+			return ctx.Kit.CCError.Error(common.CCErrCommHTTPDoRequestFailed)
+		}
+		if !response.Result {
+			blog.Errorf("update dynamic group failed, errcode: %d, errmsg: %s, input: %+v, rid: %s",
+				response.Code, response.ErrMsg, params, ctx.Kit.Rid)
+			return response.CCError()
+		}
+		return nil
+	}
+
+	// do update action now.
+	if err := s.Engine.CoreAPI.CoreService().Txn().AutoRunTxn(ctx.Kit.Ctx, ctx.Kit.Header, autoRunTxnFunc); err != nil {
+		ctx.RespAutoError(err)
+		return
+	}
+	ctx.RespEntity(nil)
+}
+
 // DeleteDynamicGroup deletes target dynamic group.
 func (s *Service) DeleteDynamicGroup(ctx *rest.Contexts) {
 	req := ctx.Request
@@ -308,6 +542,62 @@ func (s *Service) DeleteDynamicGroup(ctx *rest.Contexts) {
 	ctx.RespEntity(nil)
 }
 
+// DeleteDynamicGroup deletes target dynamic group.
+func (s *Service) DeleteDynamicGroupByID(ctx *rest.Contexts) {
+	req := ctx.Request
+
+	// target dynamic group ID.
+	targetID := req.PathParameter("id")
+
+	// pre-query target dynamic group object.
+	result, err := s.CoreAPI.CoreService().Host().GetDynamicGroupByID(ctx.Kit.Ctx, targetID, ctx.Kit.Header)
+	if err != nil {
+		blog.Errorf("delete dynamic group failed, err: %+v, rid: %s", err, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommHTTPDoRequestFailed))
+		return
+	}
+	if !result.Result {
+		blog.Errorf("delete dynamic group failed, errcode: %d, errmsg: %s, rid: %s", result.Code, result.ErrMsg, ctx.Kit.Rid)
+		ctx.RespAutoError(result.CCError())
+		return
+	}
+	dynamicGroup := result.Data
+
+	// delete base on auto run txn with func.
+	autoRunTxnFunc := func() error {
+		result, err := s.CoreAPI.CoreService().Host().DeleteDynamicGroupByID(ctx.Kit.Ctx, targetID, ctx.Kit.Header)
+		if err != nil {
+			blog.Errorf("delete dynamic group failed, err: %+v, rid: %s", err, ctx.Kit.Rid)
+			return ctx.Kit.CCError.Error(common.CCErrCommHTTPDoRequestFailed)
+		}
+		if !result.Result {
+			blog.Errorf("delete dynamic group failed, errcode: %d, errmsg: %s, rid: %s", result.Code, result.ErrMsg, ctx.Kit.Rid)
+			return result.CCError()
+		}
+
+		// audit log.
+		audit := auditlog.NewDynamicGroupAuditLog(s.CoreAPI.CoreService())
+		auditParam := auditlog.NewGenerateAuditCommonParameter(ctx.Kit, meta.AuditDelete)
+		auditLogs, err := audit.GenerateAuditLog(auditParam, &dynamicGroup)
+		if err != nil {
+			blog.Errorf("generate audit log failed after delete dynamic group[%s], err: %+v, rid: %s", targetID, err, ctx.Kit.Rid)
+			return err
+		}
+		if err := audit.SaveAuditLog(ctx.Kit, auditLogs...); err != nil {
+			blog.Errorf("save audit log failed after delete dynamic group[%s], err: %+v, rid: %s", targetID, err, ctx.Kit.Rid)
+			return err
+		}
+		return nil
+	}
+
+	// do delete action now.
+	if err := s.Engine.CoreAPI.CoreService().Txn().AutoRunTxn(ctx.Kit.Ctx, ctx.Kit.Header, autoRunTxnFunc); err != nil {
+		ctx.RespAutoError(err)
+		return
+	}
+	ctx.RespEntity(nil)
+}
+
 // GetDynamicGroup returns target dynamic group detail.
 func (s *Service) GetDynamicGroup(ctx *rest.Contexts) {
 	req := ctx.Request
@@ -329,6 +619,31 @@ func (s *Service) GetDynamicGroup(ctx *rest.Contexts) {
 	if !result.Result {
 		blog.Errorf("get dynamic group failed, errcode: %d, errmsg: %s, bizID: %s, ID: %s, rid: %s",
 			result.Code, result.ErrMsg, bizID, targetID, ctx.Kit.Rid)
+		ctx.RespAutoError(result.CCError())
+		return
+	}
+	changeTimeToMatchLocalZone(result.Data.Info.Condition)
+	ctx.RespEntity(result.Data)
+}
+
+// GetDynamicGroupByID returns target dynamic group detail.
+func (s *Service) GetDynamicGroupByID(ctx *rest.Contexts) {
+	req := ctx.Request
+
+	// target dynamic group ID.
+	targetID := req.PathParameter("id")
+
+	// do query action now.
+	result, err := s.CoreAPI.CoreService().Host().GetDynamicGroupByID(ctx.Kit.Ctx, targetID, ctx.Kit.Header)
+	if err != nil {
+		blog.Errorf("get dynamic group failed, err: %+v, ID: %s, rid: %s",
+			err, targetID, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommHTTPDoRequestFailed))
+		return
+	}
+	if !result.Result {
+		blog.Errorf("get dynamic group failed, errcode: %d, errmsg: %s, ID: %s, rid: %s",
+			result.Code, result.ErrMsg, targetID, ctx.Kit.Rid)
 		ctx.RespAutoError(result.CCError())
 		return
 	}

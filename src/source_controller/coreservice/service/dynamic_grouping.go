@@ -24,6 +24,89 @@ import (
 	"configcenter/src/storage/driver/mongodb"
 )
 
+// GetDynamicGroupClassification get dynamic group classification
+func (s *coreService) GetDynamicGroupClassification(ctx *rest.Contexts) {
+	condition := make(map[string]interface{})
+	var result []meta.DynamicGroupClassification
+	if err := mongodb.Client().Table(common.BKTableNameDynamicGroupClassification).Find(condition).All(ctx.Kit.Ctx, &result); err != nil {
+
+		blog.Errorf("get dynamic group classification failed, err: %+v, rid: %s", err, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommDBSelectFailed))
+		return
+	}
+
+	ctx.RespEntity(meta.GetDynamicGroupClassificationResults{
+		Data: result,
+	})
+}
+
+// GetDynamicGroupClassificationByID get dynamic group classification
+func (s *coreService) GetDynamicGroupClassificationByID(ctx *rest.Contexts) {
+	req := ctx.Request
+
+	// dynamic group classification ID.
+	id := req.PathParameter("id")
+
+	filter := common.KvMap{common.BKFieldID: id}
+
+	result := &meta.DynamicGroupClassification{}
+	err := mongodb.Client().Table(common.BKTableNameDynamicGroupClassification).Find(filter).One(ctx.Kit.Ctx, result)
+	if err != nil && !mongodb.Client().IsNotFoundError(err) {
+		blog.Errorf("get dynamic group classification failed, ID: %s, err: %+v, rid: %s", id, err, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommDBSelectFailed))
+		return
+	}
+	if len(result.Name) == 0 {
+		ctx.RespAutoError(ctx.Kit.CCError.Errorf(common.CCErrCommNotFound))
+		return
+	}
+	ctx.RespEntity(result)
+}
+
+// AddDynamicGroupClassification add dynamic group classification
+func (s *coreService) AddDynamicGroupClassification(ctx *rest.Contexts) {
+	newDynamicGroupClassification := meta.DynamicGroupClassification{}
+	if err := ctx.DecodeInto(&newDynamicGroupClassification); err != nil {
+		blog.Errorf("create dynamic group failed, decode request body err: %+v, rid: %s", err, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommJSONUnmarshalFailed))
+		return
+	}
+
+	filter := common.KvMap{common.BKFieldName: newDynamicGroupClassification.Name}
+	rowCount, err := mongodb.Client().Table(common.BKTableNameDynamicGroupClassification).Find(filter).Count(ctx.Kit.Ctx)
+	if err != nil {
+		blog.Errorf("create dynamic group classification failed, query count err: %+v, filter: %v, rid: %s", err, filter, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommDBSelectFailed))
+		return
+	}
+	if rowCount != 0 {
+		blog.Errorf("create dynamic group classification failed, dynamic group classification[%s] already exist, rid: %s", newDynamicGroupClassification.Name, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCErrorf(common.CCErrCommDuplicateItem, "name"))
+		return
+	}
+
+	// gen new dynamic group classification ID.
+	newDynamicGroupClassificationID, err := meta.NewDynamicGroupID()
+	if err != nil {
+		blog.Errorf("create dynamic group failed, gen new ID, err: %+v, rid: %s", err, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCSystemUnknownError))
+		return
+	}
+
+	newDynamicGroupClassification.ID = newDynamicGroupClassificationID
+	newDynamicGroupClassification.ModifyUser = util.GetUser(ctx.Kit.Header)
+	newDynamicGroupClassification.CreateTime = time.Now().UTC()
+	newDynamicGroupClassification.UpdateTime = newDynamicGroupClassification.CreateTime
+
+	err = mongodb.Client().Table(common.BKTableNameDynamicGroupClassification).Insert(ctx.Kit.Ctx, newDynamicGroupClassification)
+	if err != nil {
+		blog.Errorf("create dynamic group classification failed, group: %+v err: %+v, rid: %s", newDynamicGroupClassification, err, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommDBInsertFailed))
+		return
+	}
+	ctx.RespEntity(meta.ID{ID: newDynamicGroupClassificationID})
+}
+
 // CreateDynamicGroup creates a new dynamic group object.
 func (s *coreService) CreateDynamicGroup(ctx *rest.Contexts) {
 	newDynamicGroup := meta.DynamicGroup{}
@@ -33,7 +116,13 @@ func (s *coreService) CreateDynamicGroup(ctx *rest.Contexts) {
 		return
 	}
 
-	filter := common.KvMap{common.BKFieldName: newDynamicGroup.Name, common.BKAppIDField: newDynamicGroup.AppID}
+	var filter common.KvMap
+	if newDynamicGroup.AppID != 0 {
+		filter = common.KvMap{common.BKFieldName: newDynamicGroup.Name, common.BKAppIDField: newDynamicGroup.AppID}
+	} else {
+		filter = common.KvMap{common.BKFieldName: newDynamicGroup.Name}
+	}
+
 	rowCount, err := mongodb.Client().Table(common.BKTableNameDynamicGroup).Find(filter).Count(ctx.Kit.Ctx)
 	if err != nil {
 		blog.Errorf("create dynamic group failed, query count err: %+v, filter: %v, rid: %s", err, filter, ctx.Kit.Rid)
@@ -104,6 +193,32 @@ func (s *coreService) UpdateDynamicGroup(ctx *rest.Contexts) {
 	ctx.RespEntity(nil)
 }
 
+// UpdateDynamicGroupByID updates target dynamic group.
+func (s *coreService) UpdateDynamicGroupByID(ctx *rest.Contexts) {
+	req := ctx.Request
+
+	// target dynamic group ID.
+	targetID := req.PathParameter("id")
+
+	data := make(map[string]interface{})
+	if err := ctx.DecodeInto(&data); err != nil {
+		ctx.RespAutoError(err)
+		return
+	}
+
+	data["modify_user"] = util.GetUser(ctx.Kit.Header)
+	data[common.LastTimeField] = time.Now().UTC()
+
+	filter := common.KvMap{common.BKFieldID: targetID}
+	err := mongodb.Client().Table(common.BKTableNameDynamicGroup).Update(ctx.Kit.Ctx, filter, data)
+	if err != nil {
+		blog.Errorf("update dynamic group failed, err: %+v, ctx: %v, rid: %s", err, ctx, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommDBUpdateFailed))
+		return
+	}
+	ctx.RespEntity(nil)
+}
+
 // DeleteDynamicGroup deletes target dynamic group.
 func (s *coreService) DeleteDynamicGroup(ctx *rest.Contexts) {
 	req := ctx.Request
@@ -122,6 +237,35 @@ func (s *coreService) DeleteDynamicGroup(ctx *rest.Contexts) {
 	}
 
 	filter := common.KvMap{common.BKFieldID: targetID, common.BKAppIDField: bizIDUint64}
+	rowCount, err := mongodb.Client().Table(common.BKTableNameDynamicGroup).Find(filter).Count(ctx.Kit.Ctx)
+	if err != nil {
+		blog.Errorf("delete dynamic group failed, err: %+v, ctx: %v, rid: %s", err, filter, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommDBSelectFailed))
+		return
+	}
+	if rowCount != 1 {
+		blog.Errorf("delete dynamic group failed, not permissions or not exists, ctx: %v, rid: %s", filter, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommNotFound))
+		return
+	}
+
+	err = mongodb.Client().Table(common.BKTableNameDynamicGroup).Delete(ctx.Kit.Ctx, filter)
+	if err != nil {
+		blog.Errorf("delete dynamic group failed, err: %+v, ctx: %v, rid: %s", err, filter, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommDBDeleteFailed))
+		return
+	}
+	ctx.RespEntity(nil)
+}
+
+// DeleteDynamicGroupByID deletes target dynamic group.
+func (s *coreService) DeleteDynamicGroupByID(ctx *rest.Contexts) {
+	req := ctx.Request
+
+	// target dynamic group ID.
+	targetID := req.PathParameter("id")
+
+	filter := common.KvMap{common.BKFieldID: targetID}
 	rowCount, err := mongodb.Client().Table(common.BKTableNameDynamicGroup).Find(filter).Count(ctx.Kit.Ctx)
 	if err != nil {
 		blog.Errorf("delete dynamic group failed, err: %+v, ctx: %v, rid: %s", err, filter, ctx.Kit.Rid)
@@ -164,6 +308,29 @@ func (s *coreService) GetDynamicGroup(ctx *rest.Contexts) {
 
 	result := &meta.DynamicGroup{}
 	err = mongodb.Client().Table(common.BKTableNameDynamicGroup).Find(filter).One(ctx.Kit.Ctx, result)
+	if err != nil && !mongodb.Client().IsNotFoundError(err) {
+		blog.Errorf("get dynamic group failed, ID: %s, err: %+v, rid: %s", targetID, err, ctx.Kit.Rid)
+		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommDBSelectFailed))
+		return
+	}
+	if len(result.Name) == 0 {
+		ctx.RespAutoError(ctx.Kit.CCError.Errorf(common.CCErrCommNotFound))
+		return
+	}
+	ctx.RespEntity(result)
+}
+
+// GetDynamicGroupByID returns target dynamic group detail.
+func (s *coreService) GetDynamicGroupByID(ctx *rest.Contexts) {
+	req := ctx.Request
+
+	//  target dynamic group ID.
+	targetID := req.PathParameter("id")
+
+	filter := common.KvMap{common.BKFieldID: targetID}
+
+	result := &meta.DynamicGroup{}
+	err := mongodb.Client().Table(common.BKTableNameDynamicGroup).Find(filter).One(ctx.Kit.Ctx, result)
 	if err != nil && !mongodb.Client().IsNotFoundError(err) {
 		blog.Errorf("get dynamic group failed, ID: %s, err: %+v, rid: %s", targetID, err, ctx.Kit.Rid)
 		ctx.RespAutoError(ctx.Kit.CCError.CCError(common.CCErrCommDBSelectFailed))
